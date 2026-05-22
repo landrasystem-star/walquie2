@@ -118,8 +118,8 @@ const GITHUB_TOKEN = obtenerTokenReal();
 console.log("✅ Token cargado");
 
 // ============ CONFIGURACIÓN ============
-const GITHUB_OWNER = 'TU_USUARIO';
-const GITHUB_REPO = 'walkie-test';
+const GITHUB_OWNER = 'landrasystem-star';
+const GITHUB_REPO = 'walkie';
 // =======================================
 
 let peer = null;
