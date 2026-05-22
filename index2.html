@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Walkie Talkie - Con Botón de Limpieza</title>
+    <style>
+        *{user-select:none;-webkit-tap-highlight-color:transparent}
+        body{margin:0;min-height:100vh;background:linear-gradient(135deg,#0a0a0f,#1a1a2e);font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;padding:20px}
+        .container{max-width:550px;width:100%}
+        .walkie{background:#2c2c3e;border-radius:40px;padding:25px;box-shadow:0 20px 40px rgba(0,0,0,.5)}
+        h1{text-align:center;color:#ff6b6b;margin:0;font-size:1.4rem}
+        .subtitle{text-align:center;color:#2ed573;font-size:.7rem;margin-bottom:20px}
+        .ids-panel{background:#0a0a0f;border-radius:15px;padding:12px;margin-bottom:20px}
+        .id-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:.8rem;flex-wrap:wrap}
+        .id-label{color:#888}
+        .id-value{color:#2ed573;font-family:monospace;font-weight:bold;font-size:1rem}
+        .walkies{display:flex;gap:15px;margin-bottom:20px}
+        .walkie-card{flex:1;text-align:center;padding:15px;background:#1e1e2a;border-radius:20px;cursor:pointer;border:2px solid transparent;transition:all .2s}
+        .walkie-card.selected{border-color:#2ed573;background:#2ed57322}
+        .walkie-num{font-size:1.3rem;font-weight:bold}
+        .walkie-status{font-size:.65rem;margin-top:5px}
+        .walkie-id-peque{font-size:.7rem;color:#2ed573;margin-top:5px;font-weight:bold}
+        .botonera{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+        .botonera button{flex:1;padding:12px;border:none;border-radius:12px;color:white;font-weight:bold;cursor:pointer;transition:transform 0.1s}
+        .botonera button:active{transform:scale(.97)}
+        .reset{background:#ffa502}
+        .modo{background:#2ed573}
+        .limpiar{background:#e74c3c}
+        .ptt-btn{width:160px;height:160px;border-radius:50%;background:radial-gradient(#34495e,#2c3e50);border:4px solid #ecf0f1;cursor:pointer;margin:20px auto;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:1rem;font-weight:bold;color:white;text-align:center}
+        .ptt-btn:active{transform:scale(.96)}
+        .ptt-btn.disabled{opacity:0.5;pointer-events:none}
+        .estado{text-align:center;margin-top:10px;padding:8px;border-radius:10px;font-size:.75rem}
+        .verde{background:#2ed57322;color:#2ed573}
+        .rojo{background:#ff475722;color:#ff4757}
+        .amarillo{background:#ffa50222;color:#ffa502}
+        .info{font-size:.65rem;color:#888;text-align:center;margin-top:15px}
+        .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2ed573;color:#0a0a0f;padding:8px 16px;border-radius:30px;font-size:.75rem;z-index:1000;font-weight:bold}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="walkie">
+        <h1>📞 WALKIE <span style="color:#2ed573">+ LIMPIEZA</span></h1>
+        <div class="subtitle">🎯 Si falla, pulsa LIMPIAR (no hace falta reiniciar)</div>
+
+        <div class="ids-panel">
+            <div class="id-row">
+                <span class="id-label">🎭 Mi ID:</span>
+                <span class="id-value" id="miIdPropio">---</span>
+            </div>
+            <div class="id-row">
+                <span class="id-label">👥 Llamar a:</span>
+                <span class="id-value" id="otroIdPropio">---</span>
+            </div>
+        </div>
+
+        <div class="walkies">
+            <div class="walkie-card selected" id="cardMi">
+                <div class="walkie-num">🎭 YO</div>
+                <div class="walkie-status" id="statusMi">Esperando...</div>
+                <div class="walkie-id-peque" id="miIdPeque">---</div>
+            </div>
+            <div class="walkie-card" id="cardOtro">
+                <div class="walkie-num">👥 OTRO</div>
+                <div class="walkie-status" id="statusOtro">Esperando...</div>
+                <div class="walkie-id-peque" id="otroIdPeque">---</div>
+            </div>
+        </div>
+
+        <div class="botonera">
+            <button id="cambiarBtn" class="reset">🔄 CAMBIAR IDs</button>
+            <button id="modoBtn" class="modo">📻 MODO PTT</button>
+            <button id="limpiarBtn" class="limpiar">🧹 LIMPIAR Y RECONECTAR</button>
+        </div>
+
+        <div id="ptt" class="ptt-btn disabled">🎧<br>CONFIGURA<br>TUS IDs</div>
+
+        <div id="estado" class="estado rojo">⚡ Haz clic en "CAMBIAR IDs" para empezar</div>
+        <div class="info">
+            💡 <strong>¿Deja de funcionar? </strong> Pulsa el botón ROJO "LIMPIAR Y RECONECTAR"<br>
+            🧹 Esto limpia todo el estado corrupto SIN reiniciar el móvil
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+    let miId = "";
+    let idDestino = "";
+    let peer = null;
+    let stream = null;
+    let llamada = null;
+    let audio = null;
+    let conectado = false;
+    let hablando = false;
+    let modoPtt = true;
+    
+    function mostrarToast(msg) {
+        let toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+    }
+    
+    function actualizarUI() {
+        document.getElementById('miIdPropio').innerText = miId || "❌";
+        document.getElementById('otroIdPropio').innerText = idDestino || "❌";
+        document.getElementById('miIdPeque').innerText = miId || "---";
+        document.getElementById('otroIdPeque').innerText = idDestino || "---";
+        
+        if (miId) {
+            document.getElementById('statusMi').innerHTML = conectado ? '🟢 Conectado' : '🟡 Conectando...';
+        }
+        if (idDestino) {
+            document.getElementById('statusOtro').innerHTML = `🎯 ${idDestino}`;
+        }
+    }
+    
+    // ============ LIMPIEZA TOTAL (sin reiniciar el móvil) ============
+    function limpiezaTotal() {
+        mostrarToast("🧹 Limpiando todo el estado...");
+        
+        // 1. Cerrar llamada activa
+        if (llamada) {
+            try {
+                llamada.close();
+            } catch(e) {}
+            llamada = null;
+        }
+        
+        // 2. Destruir PeerJS
+        if (peer) {
+            try {
+                peer.destroy();
+            } catch(e) {}
+            peer = null;
+        }
+        
+        // 3. Detener y limpiar stream de audio
+        if (stream) {
+            try {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    track.enabled = false;
+                });
+            } catch(e) {}
+            stream = null;
+        }
+        
+        // 4. Limpiar audio receptor
+        if (audio) {
+            try {
+                audio.pause();
+                audio.srcObject = null;
+            } catch(e) {}
+            audio = null;
+        }
+        
+        // 5. Resetear variables de estado
+        conectado = false;
+        hablando = false;
+        
+        // 6. Limpiar cualquier timer que pudiera quedar
+        if (window.vadInterval) clearInterval(window.vadInterval);
+        
+        // 7. Forzar recolección de basura (sugerencia)
+        if (window.gc) window.gc();
+        
+        // 8. Actualizar UI
+        actualizarUI();
+        
+        document.getElementById('estado').innerHTML = "🧹 Estado limpiado. Reconectando...";
+        document.getElementById('estado').className = 'estado amarillo';
+        document.getElementById('ptt').classList.add('disabled');
+        document.getElementById('ptt').innerHTML = '🎧<br>LIMPIANDO...';
+        
+        mostrarToast("✅ Limpieza completada. Reconectando...");
+        
+        // Esperar 1 segundo y reconectar
+        setTimeout(() => {
+            if (miId && idDestino) {
+                conectarPeer(miId, idDestino);
+            } else {
+                configurarIDs();
+            }
+        }, 1000);
+    }
+    
+    function conectarPeer(miID, otroID) {
+        // Asegurar limpieza antes de conectar
+        if (peer) {
+            try { peer.destroy(); } catch(e) {}
+            peer = null;
+        }
+        
+        miId = miID;
+        idDestino = otroID;
+        conectado = false;
+        actualizarUI();
+        
+        mostrarToast(`🔌 Conectando como "${miId}"...`);
+        document.getElementById('estado').innerHTML = `🔄 Conectando como "${miId}"...`;
+        
+        peer = new Peer(miId, { host: '0.peerjs.com', port: 443, secure: true });
+        
+        peer.on('open', (id) => {
+            conectado = true;
+            document.getElementById('estado').innerHTML = `✅ Conectado como "${miId}" - Puedes llamar a "${idDestino}"`;
+            document.getElementById('estado').className = 'estado verde';
+            document.getElementById('ptt').classList.remove('disabled');
+            document.getElementById('ptt').innerHTML = modoPtt ? '🎤<br>MANTÉN PTT' : '🎤<br>MANOS LIBRES';
+            mostrarToast(`✅ ¡Conectado como "${miId}"!`);
+            actualizarUI();
+        });
+        
+        peer.on('call', (call) => {
+            mostrarToast(`📞 ¡Llamada entrante de ${call.peer}!`);
+            if (stream) {
+                call.answer(stream);
+                call.on('stream', (s) => {
+                    if (audio) {
+                        audio.pause();
+                        audio.srcObject = null;
+                    }
+                    audio = new Audio();
+                    audio.srcObject = s;
+                    audio.autoplay = true;
+                    mostrarToast(`🔊 Conectado con ${call.peer}`);
+                });
+            }
+        });
+        
+        peer.on('error', (err) => {
+            console.error('Peer error:', err);
+            if (err.type === 'unavailable-id') {
+                document.getElementById('estado').innerHTML = `⚠️ El ID "${miId}" ya está en uso. Elige otro.`;
+                document.getElementById('estado').className = 'estado rojo';
+                mostrarToast(`❌ "${miId}" ya está ocupado`);
+            } else if (err.type === 'network') {
+                document.getElementById('estado').innerHTML = `🌐 Error de red. Pulsa LIMPIAR.`;
+                mostrarToast(`🌐 Error de red. Usa el botón LIMPIAR.`);
+            } else {
+                document.getElementById('estado').innerHTML = `⚠️ Error: ${err.message || err.type}. Pulsa LIMPIAR.`;
+            }
+        });
+        
+        peer.on('disconnected', () => {
+            conectado = false;
+            document.getElementById('estado').innerHTML = `⚠️ Desconectado. Pulsa LIMPIAR para reconectar.`;
+            document.getElementById('estado').className = 'estado rojo';
+            mostrarToast(`⚠️ Desconectado. Usa el botón LIMPIAR.`);
+        });
+    }
+    
+    async function iniciarLlamada() {
+        if (!stream) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getAudioTracks().forEach(t => t.enabled = false);
+                mostrarToast('🎤 Micrófono listo');
+            } catch(e) {
+                mostrarToast('🎤 Permite el micrófono');
+                return false;
+            }
+        }
+        
+        if (!idDestino) return false;
+        
+        stream.getAudioTracks().forEach(t => t.enabled = true);
+        if (llamada) llamada.close();
+        llamada = peer.call(idDestino, stream);
+        mostrarToast(`📞 Llamando a "${idDestino}"...`);
+        return true;
+    }
+    
+    function detenerLlamada() {
+        if (stream) stream.getAudioTracks().forEach(t => t.enabled = false);
+        if (llamada) {
+            llamada.close();
+            llamada = null;
+        }
+    }
+    
+    function configurarIDs() {
+        let nuevoMi = prompt("🎭 Tu ID (como un nombre de usuario):\n\nEjemplo: pepe456", miId || "pepe456");
+        if (!nuevoMi || nuevoMi.trim() === "") return;
+        
+        let nuevoOtro = prompt(`👥 ID de la otra persona a quien llamar:\n\nTú eres: ${nuevoMi}\n¿A quién quieres llamar?\nEjemplo: pepa457`, idDestino || "pepa457");
+        if (!nuevoOtro || nuevoOtro.trim() === "") return;
+        
+        if (nuevoMi.trim() === nuevoOtro.trim()) {
+            mostrarToast("⚠️ No puedes tener el mismo ID que la otra persona");
+            return;
+        }
+        
+        conectarPeer(nuevoMi.trim(), nuevoOtro.trim());
+    }
+    
+    function toggleModo() {
+        modoPtt = !modoPtt;
+        const btn = document.getElementById('modoBtn');
+        const ptt = document.getElementById('ptt');
+        
+        if (modoPtt) {
+            btn.innerHTML = '📻 MODO PTT';
+            if (hablando) {
+                detenerLlamada();
+                hablando = false;
+            }
+            ptt.style.background = 'radial-gradient(#34495e,#2c3e50)';
+            ptt.innerHTML = '🎤<br>MANTÉN PTT';
+        } else {
+            btn.innerHTML = '🎤 MANOS LIBRES';
+            ptt.style.background = 'radial-gradient(#2ed573,#1e9c4e)';
+            ptt.innerHTML = '🎤<br>MANOS LIBRES';
+            if (conectado && idDestino && !hablando) {
+                iniciarLlamada().then(() => {
+                    hablando = true;
+                    ptt.style.background = 'radial-gradient(#ff4757,#c0392b)';
+                    ptt.innerHTML = '🎤<br>HABLANDO';
+                });
+            }
+        }
+    }
+    
+    // Eventos
+    document.getElementById('cambiarBtn').onclick = configurarIDs;
+    document.getElementById('modoBtn').onclick = toggleModo;
+    document.getElementById('limpiarBtn').onclick = limpiezaTotal;
+    
+    const ptt = document.getElementById('ptt');
+    ptt.onmousedown = async () => {
+        if (!modoPtt) return;
+        if (!conectado) {
+            mostrarToast('⚠️ Configura tus IDs primero o pulsa LIMPIAR');
+            return;
+        }
+        if (!hablando) {
+            let ok = await iniciarLlamada();
+            if (ok) {
+                hablando = true;
+                ptt.style.background = 'radial-gradient(#ff4757,#c0392b)';
+                ptt.innerHTML = '🎤<br>HABLANDO';
+            }
+        }
+    };
+    ptt.onmouseup = () => {
+        if (!modoPtt) return;
+        if (hablando) {
+            detenerLlamada();
+            hablando = false;
+            ptt.style.background = 'radial-gradient(#34495e,#2c3e50)';
+            ptt.innerHTML = '🎤<br>MANTÉN PTT';
+        }
+    };
+    ptt.ontouchstart = (e) => { e.preventDefault(); ptt.onmousedown(); };
+    ptt.ontouchend = (e) => { e.preventDefault(); ptt.onmouseup(); };
+    
+    // Precargar micrófono
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(s => { stream = s; stream.getAudioTracks().forEach(t => t.enabled = false); })
+        .catch(() => {});
+    
+    // Limpiar también al cerrar la página
+    window.addEventListener('beforeunload', () => {
+        if (peer) peer.destroy();
+        if (stream) stream.getTracks().forEach(t => t.stop());
+    });
+    
+    // Preguntar IDs al inicio
+    setTimeout(configurarIDs, 500);
+</script>
+</body>
+</html>
