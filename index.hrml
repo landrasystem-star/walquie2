@@ -106,7 +106,7 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 // ============ TOKEN CAMUFLADO ============
-const TOKEN_CAMUFLADO = "sexta_xLLoYGcLcibBLCrvC1tbCE8S7kxRKf16Xp52ola";
+const TOKEN_CAMUFLADO = "sexta_xLLoYGcLcibBLCrvC1tbCE8S7kxRKf16Xp52hola";
 
 function obtenerTokenReal() {
     return TOKEN_CAMUFLADO
